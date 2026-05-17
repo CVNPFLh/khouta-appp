@@ -1,0 +1,43 @@
+name: Build Android APK from ZIP
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v3
+
+    - name: Unzip Project Files
+      run: |
+        unzip -o "*.zip" -d ./temp_project || true
+        mv ./temp_project/*/* ./ 2>/dev/null || mv ./temp_project/* ./ 2>/dev/null || true
+
+    - name: Setup Node.js
+      uses: actions/node@v3
+      with:
+        node-version: 18
+
+    - name: Install Dependencies
+      run: |
+        npm install || npm install --legacy-peer-deps
+
+    - name: Export Static HTML
+      run: |
+        npm run build || echo "No build script found"
+
+    - name: Convert to Android APK
+      uses: jandat/pwa-to-apk-action@v1
+      with:
+        manifest-url: 'public/manifest.json' 
+
+    - name: Upload APK to Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: KhoutaApp-APK
+        path: ./*.apk
