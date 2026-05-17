@@ -1,0 +1,60 @@
+name: Build Offline Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Source Code
+      uses: actions/checkout@v3
+
+    # 1. فك ضغط ملف المشروع وتنظيم الملفات
+    - name: Unzip Project Files
+      run: |
+        unzip -o "*.zip" -d ./temp_project || true
+        # نقل الملفات للمجلد الرئيسي إذا كانت داخل مجلد فرعي
+        mv ./temp_project/*/* ./ 2>/dev/null || mv ./temp_project/* ./ 2>/dev/null || true
+
+    # 2. إعداد بيئة نود للمشاريع التي تحتوي على حزم
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
+
+    # 3. تثبيت الحزم وبناء الملفات الثابتة (إذا كان المشروع يحتوي على package.json)
+    - name: Install and Build (If Web App)
+      run: |
+        if [ -f "package.json" ]; then
+          npm install --legacy-peer-deps
+          npm run build || echo "No build script"
+        fi
+
+    # 4. التأكد من وجود ملف manifest.json وإصلاح مسارات الأوفلاين
+    - name: Prepare Offline Assets
+      run: |
+        mkdir -p public
+        if [ ! -f "public/manifest.json" ] && [ -f "manifest.json" ]; then
+          mv manifest.json public/
+        fi
+        # إنشاء ملف manifest افتراضي إذا لم يكن موجوداً لضمان نجاح البناء محلياً
+        if [ ! -f "public/manifest.json" ]; then
+          echo '{"name": "Khouta App", "short_name": "Khouta", "start_url": "index.html", "display": "standalone"}' > public/manifest.json
+        fi
+
+    # 5. تحويل ملفات الـ HTML والـ Assets الثابتة إلى تطبيق APK مستقل (Offline)
+    - name: Convert to Offline Android APK
+      uses: jandat/pwa-to-apk-action@v1
+      with:
+        manifest-url: 'public/manifest.json' 
+
+    # 6. رفع ملف الـ APK الجاهز للتحميل
+    - name: Upload APK to Artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: KhoutaOffline-APK
+        path: ./*.apk
